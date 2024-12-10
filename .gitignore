@@ -6,7 +6,7 @@
 rpdk.log
 
 #compiled file
-bin/
+./bin/
 
 #vendor
 vendor/
