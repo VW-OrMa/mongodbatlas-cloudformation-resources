@@ -1,111 +1,115 @@
-name: 'Code Health'
-on:
-  push:
-    branches:
-      - master
-  pull_request:
-  merge_group:
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-    - name: Set up Go
-      uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed
-      with:
-        go-version-file: 'cfn-resources/go.mod'
-    - name: Build
-      run: | 
-        cd cfn-resources
-        go build -v ./...
-  mock-generation:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Set up Go
-        uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed
-        with:
-          go-version-file: 'cfn-resources/go.mod'
-      - name: Generate mocks
-        run: |
-          make tools generate-mocks
-      - name: Check for uncommited files
-        run: |
-          FILES=$(git ls-files -o -m --directory --exclude-standard --no-empty-directory)
-          LINES=$(echo "$FILES" | awk 'NF' | wc -l)
-          
-          if [ "$LINES" -ne 0 ]; then
-            echo "Detected files that need to be committed:"
-            echo "$FILES" | while IFS= read -r line; do echo "  $line"; done
-            echo ""
-            echo "Mock skeletons are not up-to-date, you may have forgotten to run mockery before committing your changes."
-            exit 1
-          fi
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed
-        with:
-          go-version-file: 'cfn-resources/go.mod'
-          cache: false # see https://github.com/golangci/golangci-lint-action/issues/807
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@971e284b6050e8a5849b72094c50ab08da042db8
-        with:
-          version: v1.60.3 # Also update GOLANGCI_VERSION variable in Makefile when updating this version
-          working-directory: cfn-resources
-      - name: actionlint
-        run: | 
-           make tools 
-           actionlint -verbose -color
-        shell: bash
-  check-copyright:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed
-        with:
-          go-version-file: 'cfn-resources/go.mod'
-      - name: install tools
-        run: make tools
-      - name: check copyright
-        run: ./.github/scripts/check-licenses.sh
-        shell: bash
-  dependency-review:
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'pull_request' }}
-    steps:
-      - name: 'Checkout Repository'
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: 'Dependency Review'
-        uses: actions/dependency-review-action@3b139cfc5fae8b618d3eae3675e383bb1769c019
-  shellcheck:
-    name: shellcheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Run ShellCheck
-        uses: bewuethr/shellcheck-action@d01912909579c4b1a335828b8fca197fbb8e0aa4
-  cfn-lint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 'Checkout Repository'
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: 'Setup cfn-lint'
-        uses: scottbrenner/cfn-lint-action@ee477703112bdb0bf078bd06b361ee16aaeb24d9
-      - name: 'Run cfn-lint'
-        run: |
-          shopt -s globstar # enable globbing
-          cfn-lint --version
-      - run: cfn-lint ./cfn-resources/**/*.yml
-      - run: cfn-lint ./cfn-resources/**/*.yaml
-        if: always() # run even if previous step fails to lint all files
-  unit-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed
-        with:
-          go-version-file: 'cfn-resources/go.mod'
-      - name: run-unit-test
-        run: make unit-test
+#
+# As this repo is a Fork we first deactivate any workflows
+#
+
+#name: 'Code Health'
+#on:
+#  push:
+#    branches:
+#      - master
+#  pull_request:
+#  merge_group:
+#jobs:
+#  build:
+#    runs-on: ubuntu-latest
+#    steps:
+#    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+#    - name: Set up Go
+#      uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed
+#      with:
+#        go-version-file: 'cfn-resources/go.mod'
+#    - name: Build
+#      run: |
+#        cd cfn-resources
+#        go build -v ./...
+#  mock-generation:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+#      - name: Set up Go
+#        uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed
+#        with:
+#          go-version-file: 'cfn-resources/go.mod'
+#      - name: Generate mocks
+#        run: |
+#          make tools generate-mocks
+#      - name: Check for uncommited files
+#        run: |
+#          FILES=$(git ls-files -o -m --directory --exclude-standard --no-empty-directory)
+#          LINES=$(echo "$FILES" | awk 'NF' | wc -l)
+#
+#          if [ "$LINES" -ne 0 ]; then
+#            echo "Detected files that need to be committed:"
+#            echo "$FILES" | while IFS= read -r line; do echo "  $line"; done
+#            echo ""
+#            echo "Mock skeletons are not up-to-date, you may have forgotten to run mockery before committing your changes."
+#            exit 1
+#          fi
+#  lint:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+#      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed
+#        with:
+#          go-version-file: 'cfn-resources/go.mod'
+#          cache: false # see https://github.com/golangci/golangci-lint-action/issues/807
+#      - name: golangci-lint
+#        uses: golangci/golangci-lint-action@971e284b6050e8a5849b72094c50ab08da042db8
+#        with:
+#          version: v1.60.3 # Also update GOLANGCI_VERSION variable in Makefile when updating this version
+#          working-directory: cfn-resources
+#      - name: actionlint
+#        run: |
+#           make tools
+#           actionlint -verbose -color
+#        shell: bash
+#  check-copyright:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+#      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed
+#        with:
+#          go-version-file: 'cfn-resources/go.mod'
+#      - name: install tools
+#        run: make tools
+#      - name: check copyright
+#        run: ./.github/scripts/check-licenses.sh
+#        shell: bash
+#  dependency-review:
+#    runs-on: ubuntu-latest
+#    if: ${{ github.event_name == 'pull_request' }}
+#    steps:
+#      - name: 'Checkout Repository'
+#        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+#      - name: 'Dependency Review'
+#        uses: actions/dependency-review-action@3b139cfc5fae8b618d3eae3675e383bb1769c019
+#  shellcheck:
+#    name: shellcheck
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+#      - name: Run ShellCheck
+#        uses: bewuethr/shellcheck-action@d01912909579c4b1a335828b8fca197fbb8e0aa4
+#  cfn-lint:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: 'Checkout Repository'
+#        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+#      - name: 'Setup cfn-lint'
+#        uses: scottbrenner/cfn-lint-action@ee477703112bdb0bf078bd06b361ee16aaeb24d9
+#      - name: 'Run cfn-lint'
+#        run: |
+#          shopt -s globstar # enable globbing
+#          cfn-lint --version
+#      - run: cfn-lint ./cfn-resources/**/*.yml
+#      - run: cfn-lint ./cfn-resources/**/*.yaml
+#        if: always() # run even if previous step fails to lint all files
+#  unit-test:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+#      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed
+#        with:
+#          go-version-file: 'cfn-resources/go.mod'
+#      - name: run-unit-test
+#        run: make unit-test
