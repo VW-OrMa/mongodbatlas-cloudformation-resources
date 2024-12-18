@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -110,22 +111,34 @@ func (s *Service) OnCreated(ctx context.Context, props *ResourceProps) error {
 func (s *Service) OnRelease(ctx context.Context, props *ResourceProps, n Notification) error {
 	log.Print("start releasing resource type")
 
-	describeInput := &cloudformation.DescribeTypeInput{
-		Type:     "RESOURCE",
-		TypeName: aws.String(props.TypeName),
-	}
+	registryType := cfTypes.RegistryTypeResource
+	typeName := aws.String(props.TypeName)
 
+	describeInput := &cloudformation.DescribeTypeInput{
+		Type:     registryType,
+		TypeName: typeName,
+	}
 	describeResult, err := s.cfClient.DescribeType(ctx, describeInput)
-	if err != nil && describeResult == nil {
-		log.Print("resource type already deregistered")
+	if err != nil {
+		var apiErr *cfTypes.InvalidOperationException
+		if ok := errors.As(err, &apiErr); ok {
+			log.Print("Type is already deregistered or does not exist: ", apiErr.Message)
+			return nil
+		}
+		log.Fatalf("failed to describe type: %v", err)
+	}
+	if describeResult.DeprecatedStatus == cfTypes.DeprecatedStatusDeprecated {
+		fmt.Printf("Type is already deprecated and fully deregistered")
 		return nil
 	}
 
-	input := &cloudformation.DeregisterTypeInput{
-		Type:     cfTypes.RegistryTypeResource,
-		TypeName: aws.String(props.TypeName),
-	}
-	_, err = s.cfClient.DeregisterType(ctx, input)
+	// Must be done before a type can be deregistered completely
+	s.deregisterAllTypeVersions(ctx, registryType, typeName)
+
+	_, err = s.cfClient.DeregisterType(ctx, &cloudformation.DeregisterTypeInput{
+		Type:     registryType,
+		TypeName: typeName,
+	})
 	if err == nil {
 		log.Print("deregistered successfully")
 	}
@@ -153,6 +166,29 @@ func (s *Service) OnEnabled(ctx context.Context, n Notification) error {
 // // Requires project notifications enabled for the service.
 func (s *Service) OnDisabled(ctx context.Context, n Notification) error {
 	return nil
+}
+
+func (s *Service) deregisterAllTypeVersions(ctx context.Context, registryType cfTypes.RegistryType, typeName *string) {
+	versions, err := s.cfClient.ListTypeVersions(context.TODO(), &cloudformation.ListTypeVersionsInput{
+		Type:     registryType,
+		TypeName: typeName,
+	})
+	if err != nil {
+		log.Fatalf("failed to list type versions: %v", err)
+	}
+	for _, version := range versions.TypeVersionSummaries {
+		if version.IsDefaultVersion != nil && *version.IsDefaultVersion {
+			fmt.Printf("Skipping deregistration of default version: %s\n", aws.ToString(version.Arn))
+			continue
+		}
+
+		_, err := s.cfClient.DeregisterType(ctx, &cloudformation.DeregisterTypeInput{
+			Arn: version.Arn,
+		})
+		if err != nil {
+			log.Printf("failed to deregister version %s: %v", aws.ToString(version.Arn), err)
+		}
+	}
 }
 
 // Confirms the release of a service. This will allow VWS Service to continue with the deprovisioning

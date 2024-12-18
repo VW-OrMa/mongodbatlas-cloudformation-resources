@@ -56,7 +56,7 @@ export class VwsServiceProviderStack extends Stack {
       managedPolicies: [
         ManagedPolicy.fromAwsManagedPolicyName('AWSCloudFormationFullAccess'),
         ManagedPolicy.fromAwsManagedPolicyName('CloudWatchLogsFullAccess'),
-        ManagedPolicy.fromAwsManagedPolicyName('AWSLambdaVPCAccessExecutionRole'),
+        ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
       ],
     });
     lambdaExecutionRole.addToPolicy(new PolicyStatement({
