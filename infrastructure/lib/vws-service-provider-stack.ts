@@ -4,7 +4,7 @@ import {Queue} from "aws-cdk-lib/aws-sqs";
 import {Vpc} from "aws-cdk-lib/aws-ec2";
 import {Architecture, Code, Function, Runtime} from "aws-cdk-lib/aws-lambda";
 import {ManagedPolicy, PolicyDocument, PolicyStatement, Role, ServicePrincipal} from "aws-cdk-lib/aws-iam";
-import {createVpcName} from "../utils/helper";
+import {createVpcName, getVwsServiceQueueArn} from "../utils/helper";
 import {Duration, SecretValue, Stack, StackProps} from "aws-cdk-lib";
 import {Secret} from "aws-cdk-lib/aws-secretsmanager";
 import {IBucket} from "aws-cdk-lib/aws-s3";
@@ -104,9 +104,7 @@ export class VwsServiceProviderStack extends Stack {
 
     // provide service role and notification handler queue of the custom vws service provider
     const vwsServiceRole = Role.fromRoleArn(this, 'MongoDBAtlasServiceProviderRole', `arn:aws:iam::${this.account}:role/vws/initializer/vws-init-1d0a77-CloudFormationRegistration`)
-    const vwsServiceQueue = Queue.fromQueueArn(this, 'MongoDBAtlasServiceProviderNotificationQueue',
-      `arn:aws:sqs:eu-west-1:685456541949:service-notification-${this.account}-d7969cfe-9bc3-45c9-9820-454daef4f43b.fifo` // TODO Maybe one service to register all services at once
-    );
+    const vwsServiceQueue = Queue.fromQueueArn(this, 'MongoDBAtlasServiceProviderNotificationQueue', getVwsServiceQueueArn(this.account));
 
     const lambdaExecutionRole = new Role(this, 'MongoDBAtlasResourceHandlerRole', {
       roleName: 'MongoDBAtlasResourceHandlerRole',
