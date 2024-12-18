@@ -29,7 +29,7 @@ func HandleVwsProviderNotification(ctx context.Context, sqsEvent events.SQSEvent
 		return errors.New("TYPES_TO_ACTIVATE is not set")
 	}
 
-	service := internal.NewService(ctx, notification.AccountId)
+	service := internal.NewService(ctx, notification.AwsAccountId)
 
 	for _, typeToActivate := range typesToActivateList {
 		typeName := "MongoDB::Atlas::" + typeToActivate

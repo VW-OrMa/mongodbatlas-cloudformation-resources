@@ -60,6 +60,10 @@ export class VwsServiceProviderStack extends Stack {
       ],
     });
     lambdaExecutionRole.addToPolicy(new PolicyStatement({
+      actions: ['sts:AssumeRole'],
+      resources: ['*'],
+    }));
+    lambdaExecutionRole.addToPolicy(new PolicyStatement({
       actions: ['s3:*'],
       resources: [resourceBucket.arnForObjects('*')],
     }));
