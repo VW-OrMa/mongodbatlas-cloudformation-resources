@@ -2,13 +2,19 @@
   "name": "mongodbatlas-cfn-resources",
   "version": "0.1.0",
   "bin": {
-    "infrastructure": "bin/infrastructure.js"
+    "mongodbresources": "bin/mongodbresources.ts"
   },
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "cdk": "cdk",
+
+    "deployDevelopment": "cdk deploy --output cdk.out/development --profile dev *",
+    "synthDevelopment": "cdk synth --output cdk.out/development --profile dev *",
+
+    "deployProduction": "cdk deploy --output cdk.out/production --profile common *",
+    "synthProduction": "cdk synth --output cdk.out/production --profile common *"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

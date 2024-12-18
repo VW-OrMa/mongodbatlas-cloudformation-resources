@@ -19,7 +19,7 @@ update.json
 # any "dot"-file, anywhere almost
 **/.*
 !/.github
-!/.gitignore
+!.gitignore
 !*.rpdk-config
 !.mockery.yaml
 .taskcat_overrides.yml
