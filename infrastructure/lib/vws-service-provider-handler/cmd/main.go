@@ -20,8 +20,11 @@ var (
 
 func HandleVwsProviderNotification(ctx context.Context, sqsEvent events.SQSEvent) error {
 
-	typesToActivate := strings.Split(os.Getenv("TYPES_TO_ACTIVATE"), ",")
-	if len(typesToActivate) == 0 {
+	typesToActivate := os.Getenv("TYPES_TO_ACTIVATE")
+	log.Print("typesToActivate: ", typesToActivate)
+
+	typesToActivateList := strings.Split(typesToActivate, ",")
+	if len(typesToActivateList) == 0 {
 		log.Println("TYPES_TO_ACTIVATE is not set")
 		return errors.New("TYPES_TO_ACTIVATE is not set")
 	}
@@ -46,8 +49,7 @@ func HandleVwsProviderNotification(ctx context.Context, sqsEvent events.SQSEvent
 
 	service := internal.NewService(cfClient, roleArn, bucketName)
 
-	log.Print("typesToActivate: ", typesToActivate)
-	for _, typeToActivate := range typesToActivate {
+	for _, typeToActivate := range typesToActivateList {
 		typeName := "MongoDB::Atlas::" + typeToActivate
 		log.SetPrefix(fmt.Sprintf("[%s] ", typeName))
 

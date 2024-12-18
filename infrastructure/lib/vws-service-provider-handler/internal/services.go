@@ -144,6 +144,7 @@ func confirmRelease(ctx context.Context, confirm Confirmation) error {
 	r.WithContext(ctx)
 	resp, err := httpClient.Do(r)
 	if err != nil {
+		log.Print("error confirming release at vws. Deadline for automatic confirm is set to: ", confirm.Deadline)
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
