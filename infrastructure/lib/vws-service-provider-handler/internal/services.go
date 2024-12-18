@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"io"
 	"log"
 	"net/http"
@@ -15,13 +18,35 @@ import (
 	"vws-service-provider-handler/internal/helper"
 )
 
+var (
+	region          = envOrFail("AWS_REGION")
+	roleArnTemplate = envOrFail("EXECUTION_ROLE_ARN_TEMPLATE")
+	servicesProxy   = envOrFail("SERVICES_PROXY")
+	bucketName      = envOrFail("BUCKET_NAME")
+)
+
 type Service struct {
 	cfClient   *cloudformation.Client
 	roleArn    string
 	bucketName string
 }
 
-func NewService(cfClient *cloudformation.Client, roleArn string, bucketName string) *Service {
+func NewService(ctx context.Context, accountId string) *Service {
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
+	if err != nil {
+		log.Fatalf("Failed to load AWS SDK config: %v", err)
+	}
+
+	roleArn := strings.Replace(roleArnTemplate, "{ACCOUNT_ID}", accountId, 1)
+
+	// Build up new session to access the target account as the service role
+	stsClient := sts.NewFromConfig(cfg)
+	credentials := stscreds.NewAssumeRoleProvider(stsClient, roleArn)
+
+	cfClient := cloudformation.NewFromConfig(cfg, func(options *cloudformation.Options) {
+		options.Credentials = credentials
+	})
+
 	return &Service{
 		cfClient:   cfClient,
 		roleArn:    roleArn,
@@ -131,7 +156,7 @@ func confirmRelease(ctx context.Context, confirm Confirmation) error {
 		Transport: &http.Transport{
 			Proxy: func(r *http.Request) (*url.URL, error) {
 				if strings.HasSuffix(r.URL.Host, "admin.vwapps.cloud") {
-					return url.Parse(os.Getenv("SERVICES_PROXY"))
+					return url.Parse(servicesProxy)
 				}
 				return nil, nil
 			}},
@@ -153,4 +178,12 @@ func confirmRelease(ctx context.Context, confirm Confirmation) error {
 		return fmt.Errorf("expected accepted Status, got: %d, body: %s", resp.StatusCode, body)
 	}
 	return err
+}
+
+func envOrFail(key string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		panic("missing configuration environment entry: " + key)
+	}
+	return v
 }

@@ -3,8 +3,7 @@ enum ACCOUNTS {
   DEVELOPMENT = 'dev',
 }
 
-export function getVwsServiceRoleArn(accountId: string): string {
-  const roleName = 'CloudFormationRegistration'
+export function getVwsServiceConsumerRole(accountId: string): string {
   let roleId;
   switch (getAccountNameById(accountId)) {
     case ACCOUNTS.PRODUCTION:
@@ -17,7 +16,7 @@ export function getVwsServiceRoleArn(accountId: string): string {
       throw new Error('VWS service role arn could not be mapped');
   }
 
-  return `arn:aws:iam::${accountId}:role/vws/initializer/vws-init-${roleId}-${roleName}`
+  return `vws/initializer/vws-init-${roleId}-CloudFormationRegistration`
 }
 
 export function getVwsServiceQueueArn(accountId: string): string {
@@ -50,7 +49,7 @@ export function getAccountNameById(accountId: string): ACCOUNTS {
 export function createVpcName(accountId: string): string {
   const accountName = getAccountNameById(accountId);
 
-  if(accountName === ACCOUNTS.PRODUCTION) {
+  if (accountName === ACCOUNTS.PRODUCTION) {
     return 'orma-vpc'
   }
   return `${accountName}-order`;

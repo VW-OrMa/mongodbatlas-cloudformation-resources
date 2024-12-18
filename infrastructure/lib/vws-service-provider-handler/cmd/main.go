@@ -6,19 +6,19 @@ import (
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"log"
 	"os"
 	"strings"
 	"vws-service-provider-handler/internal"
 )
 
-var (
-	cfClient *cloudformation.Client
-)
-
 func HandleVwsProviderNotification(ctx context.Context, sqsEvent events.SQSEvent) error {
+
+	notification, err := internal.ReadNotification(sqsEvent.Records[0].Body)
+	if err != nil {
+		log.Print(fmt.Errorf("unable to read config: %v", err))
+		return err
+	}
 
 	typesToActivate := os.Getenv("TYPES_TO_ACTIVATE")
 	log.Print("typesToActivate: ", typesToActivate)
@@ -29,25 +29,7 @@ func HandleVwsProviderNotification(ctx context.Context, sqsEvent events.SQSEvent
 		return errors.New("TYPES_TO_ACTIVATE is not set")
 	}
 
-	bucketName := os.Getenv("BUCKET_NAME")
-	if bucketName == "" {
-		log.Println("BUCKET_NAME is not set")
-		return errors.New("BUCKET_NAME is not set")
-	}
-
-	roleArn := os.Getenv("EXECUTION_ROLE_ARN")
-	if roleArn == "" {
-		log.Println("EXECUTION_ROLE_ARN is not set")
-		return errors.New("EXECUTION_ROLE_ARN is not set")
-	}
-
-	notification, err := internal.ReadNotification(sqsEvent.Records[0].Body)
-	if err != nil {
-		log.Print(fmt.Errorf("unable to load config: %v", err))
-		return err
-	}
-
-	service := internal.NewService(cfClient, roleArn, bucketName)
+	service := internal.NewService(ctx, notification.AccountId)
 
 	for _, typeToActivate := range typesToActivateList {
 		typeName := "MongoDB::Atlas::" + typeToActivate
@@ -83,17 +65,6 @@ func HandleVwsProviderNotification(ctx context.Context, sqsEvent events.SQSEvent
 		}
 	}
 	return nil
-}
-
-// Include any code you want Lambda to run during the initialization phase
-func init() {
-	ctx := context.TODO()
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		log.Fatalf("Failed to load AWS SDK config: %v", err)
-	}
-
-	cfClient = cloudformation.NewFromConfig(cfg)
 }
 
 // This is a required entry point for your Lambda handler. The argument to the lambda.Start() method is your main handler method.

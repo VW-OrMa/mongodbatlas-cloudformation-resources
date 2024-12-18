@@ -3,11 +3,12 @@ import {SqsEventSource} from "aws-cdk-lib/aws-lambda-event-sources";
 import {Queue} from "aws-cdk-lib/aws-sqs";
 import {Vpc} from "aws-cdk-lib/aws-ec2";
 import {Architecture, Code, Function, Runtime} from "aws-cdk-lib/aws-lambda";
-import {ManagedPolicy, PolicyDocument, PolicyStatement, Role, ServicePrincipal} from "aws-cdk-lib/aws-iam";
-import {createVpcName, getVwsServiceQueueArn, getVwsServiceRoleArn} from "../utils/helper";
+import {AccountPrincipal, ManagedPolicy, PolicyStatement, Role, ServicePrincipal} from "aws-cdk-lib/aws-iam";
+import {createVpcName, getVwsServiceConsumerRole, getVwsServiceQueueArn} from "../utils/helper";
 import {Duration, SecretValue, Stack, StackProps} from "aws-cdk-lib";
 import {Secret} from "aws-cdk-lib/aws-secretsmanager";
 import {IBucket} from "aws-cdk-lib/aws-s3";
+import {OutgoingProxy, OutgoingProxyCredentials} from "@vw-sre/vws-cdk";
 
 const AtlasBasicResources: string[] = [
   "Cluster",
@@ -28,6 +29,15 @@ export class VwsServiceProviderStack extends Stack {
       vpcName: createVpcName(this.account),
     });
 
+    const proxy = new OutgoingProxy(this, 'OutgoingProxy', {
+      allowedSuffixes: ['admin.vwapps.cloud'],
+      allowedPorts: [443],
+    })
+    const proxyCredentials = new OutgoingProxyCredentials(this, 'OutgoingProxyCredentials', {
+      instance: proxy,
+      principals: [new AccountPrincipal(this.account)],
+    })
+
     // Bootstrap MongoAtlas (as awscdk-resources-mongodbatlas.MongoAtlasBootstrap is not available)
     // Create a dummy Secret for MongoDB Atlas profile (https://github.com/mongodb/mongodbatlas-cloudformation-resources/tree/master?tab=readme-ov-file#2-configure-your-profile)
     const profileName = 'default'
@@ -40,70 +50,6 @@ export class VwsServiceProviderStack extends Stack {
       }
     })
 
-    // Create mongo resources execution role
-    const mongoResourcesExecutionRole = new Role(this, 'MongoDBAtlasResourcesExecutionRole', {
-      roleName: 'MongoDBAtlasResourcesExecutionRole',
-      assumedBy: new ServicePrincipal('resources.cloudformation.amazonaws.com'),
-      inlinePolicies: {
-        ResourceTypePolicy: new PolicyDocument({
-          statements: [
-            new PolicyStatement({
-              resources: ['*'],
-              actions: [
-                // "ec2:DeleteSecurityGroup",
-                // "ec2:DescribeAccountAttributes",
-                // "ec2:DescribeImages",
-                // "ec2:DescribeInstances",
-                // "ec2:DescribeInternetGateways",
-                // "ec2:DescribeRouteTables",
-                // "ec2:DescribeSecurityGroups",
-                // "ec2:DescribeSubnets",
-                // "ec2:DescribeTags",
-                // "ec2:DescribeVolumes",
-                // "ec2:DescribeVpcAttribute",
-                // "ec2:DescribeVpcClassicLink",
-                // "ec2:DescribeVpcClassicLinkDnsSupport",
-                // "ec2:DescribeVpcEndpoints",
-                // "ec2:DescribeVpcs",
-                // "ec2:RevokeSecurityGroupIngress",
-                // "ec2:TerminateInstances",
-                // "elasticloadbalancing:*",
-                "iam:GetRole",
-                "iam:GetRolePolicy",
-                "iam:GetUser",
-                "iam:ListAccessKeys",
-                "iam:PassRole",
-                // "route53:ChangeResourceRecordSets",
-                // "route53:GetChange",
-                // "route53:GetHostedZone",
-                // "route53:ListHostedZones",
-                // "route53:ListHostedZonesByName",
-                // "route53:ListQueryLoggingConfigs",
-                // "route53:ListResourceRecordSets",
-                "s3:*",
-                // "secretsmanager:CreateSecret",
-                // "secretsmanager:DeleteSecret",
-                // "secretsmanager:DescribeSecret",
-                // "secretsmanager:GetSecretValue",
-                // "secretsmanager:ListSecrets",
-                // "secretsmanager:PutSecretValue",
-                // "secretsmanager:TagResource",
-                "ssm:*",
-                "tag:GetResources"
-              ]
-            })
-          ]
-        })
-      },
-      description: 'Role to execute MongoDB Atlas resources',
-    });
-    mongoResourcesExecutionRole.assumeRolePolicy?.addStatements(new PolicyStatement({
-      actions: ['sts:AssumeRole'],
-      principals: [new ServicePrincipal('resources.cloudformation.amazonaws.com')],
-    }));
-
-    // provide service role and notification handler queue of the custom vws service provider
-    const vwsServiceRole = Role.fromRoleArn(this, 'MongoDBAtlasServiceProviderRole', getVwsServiceRoleArn(this.account));
     const vwsServiceQueue = Queue.fromQueueArn(this, 'MongoDBAtlasServiceProviderNotificationQueue', getVwsServiceQueueArn(this.account));
 
     const lambdaExecutionRole = new Role(this, 'MongoDBAtlasResourceHandlerRole', {
@@ -115,14 +61,6 @@ export class VwsServiceProviderStack extends Stack {
       ],
     });
     lambdaExecutionRole.addToPolicy(new PolicyStatement({
-      actions: ['sts:AssumeRole'],
-      resources: [vwsServiceRole.roleArn]
-    }));
-    lambdaExecutionRole.addToPolicy(new PolicyStatement({
-      actions: ['iam:PassRole'],
-      resources: [mongoResourcesExecutionRole.roleArn],
-    }));
-    lambdaExecutionRole.addToPolicy(new PolicyStatement({
       actions: ['s3:*'],
       resources: [props.resourceBucket.arnForObjects('*')],
     }));
@@ -130,6 +68,9 @@ export class VwsServiceProviderStack extends Stack {
       actions: ['kms:*'],
       resources: ['*'],
     }))
+
+    const serviceConsumerRole = getVwsServiceConsumerRole(this.account);
+    const serviceProxyUrl = `http://{{resolve:secretsmanager:${proxyCredentials.secret.secretArn}:SecretString:username:AWSCURRENT:}}:{{resolve:secretsmanager:${proxyCredentials.secret.secretArn}:SecretString:password:AWSCURRENT:}}@${proxy.dnsName}:8080`
 
     new Function(this, 'MongoDBAtlasResourceHandler', {
       vpc,
@@ -145,7 +86,8 @@ export class VwsServiceProviderStack extends Stack {
       ],
       environment: {
         TYPES_TO_ACTIVATE: AtlasBasicResources.join(','),
-        EXECUTION_ROLE_ARN: mongoResourcesExecutionRole.roleArn,
+        EXECUTION_ROLE_ARN_TEMPLATE: `arn:aws:iam::{ACCOUNT_ID}:role/vws/initializer/${serviceConsumerRole}`,
+        SERVICES_PROXY: serviceProxyUrl,
         BUCKET_NAME: props.resourceBucket.bucketName,
       },
       timeout: Duration.seconds(90),
