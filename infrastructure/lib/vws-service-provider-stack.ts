@@ -103,7 +103,7 @@ export class VwsServiceProviderStack extends Stack {
     }));
 
     // provide service role and notification handler queue of the custom vws service provider
-    const vwsServiceRole = Role.fromRoleArn(this, 'MongoDBAtlasServiceProviderRole', `arn:aws:iam::${this.account}:role/vws/initializer/vws-init-1d0a77-CloudFormationRegistration`)
+    const vwsServiceRole = Role.fromRoleArn(this, 'MongoDBAtlasServiceProviderRole', `arn:aws:iam::${this.account}:role/vws/initializer/vws-init-96a56e-CloudFormationRegistration`)
     const vwsServiceQueue = Queue.fromQueueArn(this, 'MongoDBAtlasServiceProviderNotificationQueue', getVwsServiceQueueArn(this.account));
 
     const lambdaExecutionRole = new Role(this, 'MongoDBAtlasResourceHandlerRole', {
