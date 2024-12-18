@@ -148,7 +148,7 @@ export class VwsServiceProviderStack extends Stack {
         EXECUTION_ROLE_ARN: mongoResourcesExecutionRole.roleArn,
         BUCKET_NAME: props.resourceBucket.bucketName,
       },
-      timeout: Duration.minutes(5),
+      timeout: Duration.seconds(90),
     });
   }
 }
