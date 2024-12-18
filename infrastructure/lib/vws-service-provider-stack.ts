@@ -104,10 +104,8 @@ export class VwsServiceProviderStack extends Stack {
 
     // provide service role and notification handler queue of the custom vws service provider
     const vwsServiceRole = Role.fromRoleArn(this, 'MongoDBAtlasServiceProviderRole', `arn:aws:iam::${this.account}:role/vws/initializer/vws-init-1d0a77-CloudFormationRegistration`)
-    const vwsServiceNotificationQueue = new SqsEventSource(
-      Queue.fromQueueArn(this, 'MongoDBAtlasServiceProviderNotificationQueue',
-        `arn:aws:sqs:eu-west-1:685456541949:service-notification-${this.account}-d7969cfe-9bc3-45c9-9820-454daef4f43b.fifo` // TODO Maybe one service to register all services at once
-      )
+    const vwsServiceQueue = Queue.fromQueueArn(this, 'MongoDBAtlasServiceProviderNotificationQueue',
+      `arn:aws:sqs:eu-west-1:685456541949:service-notification-${this.account}-d7969cfe-9bc3-45c9-9820-454daef4f43b.fifo` // TODO Maybe one service to register all services at once
     );
 
     const lambdaExecutionRole = new Role(this, 'MongoDBAtlasResourceHandlerRole', {
@@ -145,7 +143,7 @@ export class VwsServiceProviderStack extends Stack {
       code: Code.fromDockerBuild('./lib/vws-service-provider-handler'),
       handler: 'bootstrap',
       events: [
-        vwsServiceNotificationQueue,
+        new SqsEventSource(vwsServiceQueue),
       ],
       environment: {
         TYPES_TO_ACTIVATE: AtlasBasicResources.join(','),

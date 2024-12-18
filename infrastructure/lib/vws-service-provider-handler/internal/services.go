@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"context"
@@ -6,27 +6,45 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
-	"vws-service-provider-handler/handler/helper"
-	"vws-service-provider-handler/handler/internal"
+	"vws-service-provider-handler/internal/helper"
 )
 
-// Called when the service was activated in an account. The account details can be found in the internal.Notification object.
+type Service struct {
+	cfClient   *cloudformation.Client
+	roleArn    string
+	bucketName string
+}
+
+func NewService(cfClient *cloudformation.Client, roleArn string, bucketName string) *Service {
+	return &Service{
+		cfClient:   cfClient,
+		roleArn:    roleArn,
+		bucketName: bucketName,
+	}
+}
+
+type ResourceProps struct {
+	TypeName       string
+	TypeToActivate string
+}
+
+// OnCreated Called when the service was activated in an account. The account details can be found in the internal.Notification object.
 // Use-Cases of this notification is a one-time setup of the account in order to be able to consume this service.
-func onCreated(ctx context.Context, props *ResourceProps) error {
+func (s *Service) OnCreated(ctx context.Context, props *ResourceProps) error {
 	log.Print("start registering resource type")
 
 	describeInput := &cloudformation.DescribeTypeInput{
 		Type:     "RESOURCE",
-		TypeName: aws.String(props.typeName),
+		TypeName: aws.String(props.TypeName),
 	}
 
-	describeResult, err := cfClient.DescribeType(ctx, describeInput)
+	describeResult, err := s.cfClient.DescribeType(ctx, describeInput)
 	if err == nil && describeResult != nil {
 		log.Print("resource type already exists: ", *describeResult.TypeName)
 		return nil
@@ -34,14 +52,14 @@ func onCreated(ctx context.Context, props *ResourceProps) error {
 
 	input := &cloudformation.RegisterTypeInput{
 		Type:                 types.RegistryTypeResource,
-		TypeName:             aws.String(props.typeName),
-		SchemaHandlerPackage: aws.String(fmt.Sprintf("s3://%s/%s.zip", bucketName, helper.ToKebabCase(props.typeToActivate))),
-		ExecutionRoleArn:     aws.String(roleArn),
+		TypeName:             aws.String(props.TypeName),
+		SchemaHandlerPackage: aws.String(fmt.Sprintf("s3://%s/%s.zip", s.bucketName, helper.ToKebabCase(props.TypeToActivate))),
+		ExecutionRoleArn:     aws.String(s.roleArn),
 	}
 
 	log.Printf("try register: %v, %v", *input.TypeName, *input.SchemaHandlerPackage)
 
-	result, err := cfClient.RegisterType(ctx, input)
+	result, err := s.cfClient.RegisterType(ctx, input)
 	if result != nil {
 		log.Print("registered successfully")
 	}
@@ -49,22 +67,22 @@ func onCreated(ctx context.Context, props *ResourceProps) error {
 	return err
 }
 
-// This event indicates that an Account Developer requested this service to be removed from their account. Account
+// OnRelease This event indicates that an Account Developer requested this service to be removed from their account. Account
 // details can be found in the internal.Notification object.
 // This notification should trigger a cleanup of resources created in onCreate, which should not persist after this
 // service is removed.
 //
-// Once the cleanup is done, VWS Services expects a confirmation to proceed with deprovisioning the service from the
+// Once the cleanup is done, VWS Service expects a confirmation to proceed with deprovisioning the service from the
 // consumer's account. You can either call this confirmation URL directly or use the helper method from ConsumerAccounts.
-func onRelease(ctx context.Context, props *ResourceProps, n internal.Notification) error {
+func (s *Service) OnRelease(ctx context.Context, props *ResourceProps, n Notification) error {
 	log.Print("start releasing resource type")
 
 	describeInput := &cloudformation.DescribeTypeInput{
 		Type:     "RESOURCE",
-		TypeName: aws.String(props.typeName),
+		TypeName: aws.String(props.TypeName),
 	}
 
-	describeResult, err := cfClient.DescribeType(ctx, describeInput)
+	describeResult, err := s.cfClient.DescribeType(ctx, describeInput)
 	if err != nil && describeResult == nil {
 		log.Print("resource type already degregistered")
 		return nil
@@ -72,43 +90,43 @@ func onRelease(ctx context.Context, props *ResourceProps, n internal.Notificatio
 
 	input := &cloudformation.DeregisterTypeInput{
 		Type:     types.RegistryTypeResource,
-		TypeName: aws.String(props.typeName),
+		TypeName: aws.String(props.TypeName),
 	}
-	result, err := cfClient.DeregisterType(ctx, input)
+	result, err := s.cfClient.DeregisterType(ctx, input)
 	if err != nil {
 		return err
 	}
 
 	log.Print("result: ", result)
 
-	return ConfirmRelease(ctx, n.Confirmation)
+	return confirmRelease(ctx, n.Confirmation)
 }
 
-// An information only notification. Whenever a service is deactivated from a consumer's account, this notification will
-// be sent. The notification will be sent _after_ the service was released and fully deprovisioned by VWS Services.
+// OnDeleted An information only notification. Whenever a service is deactivated from a consumer's account, this notification will
+// be sent. The notification will be sent _after_ the service was released and fully deprovisioned by VWS Service.
 // You may use this event to do further cleanup on _your_ side. You cannot assume any roleArn in the consumer's account
 // anymore, as the roles of the service were already been deleted from the consumer's account.
-func onDeleted(ctx context.Context, n internal.Notification) error {
+func (s *Service) OnDeleted(ctx context.Context, n Notification) error {
 	return nil
 }
 
-// Indicates that a service was enabled on a project, before it was created in any account.
+// OnEnabled Indicates that a service was enabled on a project, before it was created in any account.
 //
 // Requires project notifications enabled for the service.
-func onEnabled(ctx context.Context, n internal.Notification) error {
+func (s *Service) OnEnabled(ctx context.Context, n Notification) error {
 	return nil
 }
 
-// Indicates that a service was disabled for a project.
-//
-// Requires project notifications enabled for the service.
-func onDisabled(ctx context.Context, n internal.Notification) error {
+// OnDisabled // Indicates that a service was disabled for a project.
+// //
+// // Requires project notifications enabled for the service.
+func (s *Service) OnDisabled(ctx context.Context, n Notification) error {
 	return nil
 }
 
-// ConfirmRelease Confirms the release of a service. This will allow VWS Services to continue with the deprovisioning
+// Confirms the release of a service. This will allow VWS Service to continue with the deprovisioning
 // process in order to remove the service from the consumer's account.
-func ConfirmRelease(ctx context.Context, confirm internal.Confirmation) error {
+func confirmRelease(ctx context.Context, confirm Confirmation) error {
 
 	httpClient := http.Client{
 		Transport: &http.Transport{
@@ -131,7 +149,7 @@ func ConfirmRelease(ctx context.Context, confirm internal.Confirmation) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusAccepted {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("expected accepted Status, got: %d, body: %s", resp.StatusCode, body)
 	}
 	return err

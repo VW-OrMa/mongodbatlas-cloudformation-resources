@@ -11,18 +11,11 @@ import (
 	"log"
 	"os"
 	"strings"
-	"vws-service-provider-handler/handler/internal"
+	"vws-service-provider-handler/internal"
 )
 
-type ResourceProps struct {
-	typeName       string
-	typeToActivate string
-}
-
 var (
-	cfClient   *cloudformation.Client
-	bucketName string
-	roleArn    string
+	cfClient *cloudformation.Client
 )
 
 func HandleVwsProviderNotification(ctx context.Context, sqsEvent events.SQSEvent) error {
@@ -33,13 +26,13 @@ func HandleVwsProviderNotification(ctx context.Context, sqsEvent events.SQSEvent
 		return errors.New("TYPES_TO_ACTIVATE is not set")
 	}
 
-	bucketName = os.Getenv("BUCKET_NAME")
+	bucketName := os.Getenv("BUCKET_NAME")
 	if bucketName == "" {
 		log.Println("BUCKET_NAME is not set")
 		return errors.New("BUCKET_NAME is not set")
 	}
 
-	roleArn = os.Getenv("EXECUTION_ROLE_ARN")
+	roleArn := os.Getenv("EXECUTION_ROLE_ARN")
 	if roleArn == "" {
 		log.Println("EXECUTION_ROLE_ARN is not set")
 		return errors.New("EXECUTION_ROLE_ARN is not set")
@@ -51,31 +44,33 @@ func HandleVwsProviderNotification(ctx context.Context, sqsEvent events.SQSEvent
 		return err
 	}
 
+	service := internal.NewService(cfClient, roleArn, bucketName)
+
 	log.Print("typesToActivate: ", typesToActivate)
 	for _, typeToActivate := range typesToActivate {
 		typeName := "MongoDB::Atlas::" + typeToActivate
 		log.SetPrefix(fmt.Sprintf("[%s] ", typeName))
 
-		props := &ResourceProps{
-			typeName:       typeName,
-			typeToActivate: typeToActivate,
+		props := &internal.ResourceProps{
+			TypeName:       typeName,
+			TypeToActivate: typeToActivate,
 		}
 
 		switch notification.Action {
 		case internal.ActionEnabled:
-			err = onEnabled(ctx, notification)
+			err = service.OnEnabled(ctx, notification)
 			break
 		case internal.ActionDisabled:
-			err = onDisabled(ctx, notification)
+			err = service.OnDisabled(ctx, notification)
 			break
 		case internal.ActionCreated:
-			err = onCreated(ctx, props)
+			err = service.OnCreated(ctx, props)
 			break
 		case internal.ActionRelease:
-			err = onRelease(ctx, props, notification)
+			err = service.OnRelease(ctx, props, notification)
 			break
 		case internal.ActionDeleted:
-			err = onDeleted(ctx, notification)
+			err = service.OnDeleted(ctx, notification)
 		default:
 			log.Print(fmt.Errorf("unknown action: %s", notification.Action))
 			return nil
