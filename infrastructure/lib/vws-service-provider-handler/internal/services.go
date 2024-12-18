@@ -84,7 +84,7 @@ func (s *Service) OnRelease(ctx context.Context, props *ResourceProps, n Notific
 
 	describeResult, err := s.cfClient.DescribeType(ctx, describeInput)
 	if err != nil && describeResult == nil {
-		log.Print("resource type already degregistered")
+		log.Print("resource type already deregistered")
 		return nil
 	}
 
@@ -92,12 +92,10 @@ func (s *Service) OnRelease(ctx context.Context, props *ResourceProps, n Notific
 		Type:     types.RegistryTypeResource,
 		TypeName: aws.String(props.TypeName),
 	}
-	result, err := s.cfClient.DeregisterType(ctx, input)
-	if err != nil {
-		return err
+	_, err = s.cfClient.DeregisterType(ctx, input)
+	if err == nil {
+		log.Print("deregistered successfully")
 	}
-
-	log.Print("result: ", result)
 
 	return confirmRelease(ctx, n.Confirmation)
 }
@@ -127,6 +125,7 @@ func (s *Service) OnDisabled(ctx context.Context, n Notification) error {
 // Confirms the release of a service. This will allow VWS Service to continue with the deprovisioning
 // process in order to remove the service from the consumer's account.
 func confirmRelease(ctx context.Context, confirm Confirmation) error {
+	log.Print("confirming release")
 
 	httpClient := http.Client{
 		Transport: &http.Transport{
