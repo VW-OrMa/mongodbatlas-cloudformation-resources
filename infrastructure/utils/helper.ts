@@ -3,6 +3,23 @@ enum ACCOUNTS {
   DEVELOPMENT = 'dev', // dev
 }
 
+export function getVwsServiceRoleArn(accountId: string): string {
+  const roleName = 'CloudFormationRegistration'
+  let roleId;
+  switch (getAccountNameById(accountId)) {
+    case ACCOUNTS.PRODUCTION:
+      roleId = 'bb2b2d';
+      break;
+    case ACCOUNTS.DEVELOPMENT:
+      roleId = '96a56e';
+      break;
+    default:
+      throw new Error('VWS service role arn could not be mapped');
+  }
+
+  return `arn:aws:iam::${accountId}:role/vws/initializer/vws-init-${roleId}-${roleName}`
+}
+
 export function getVwsServiceQueueArn(accountId: string): string {
   let queueId;
   switch (getAccountNameById(accountId)) {
