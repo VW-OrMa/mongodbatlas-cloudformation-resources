@@ -1,6 +1,6 @@
 import {Construct} from 'constructs';
 import {Vpc} from "aws-cdk-lib/aws-ec2";
-import {createVpcName} from "../utils/helper";
+import {createVpcName, getAccountNameById} from "../utils/helper";
 import {DockerImage, RemovalPolicy, Size, Stack, StackProps} from "aws-cdk-lib";
 import {Bucket, IBucket} from "aws-cdk-lib/aws-s3";
 import {BucketDeployment, Source} from "aws-cdk-lib/aws-s3-deployment";
@@ -21,7 +21,7 @@ export class MongoDbAtlasResourcesStack extends Stack {
 
     // Upload all mongodb cfn resources to S3
     const customServiceProviderBucket = new Bucket(this, 'CustomServiceProviderBucket', {
-      bucketName: `mongodbatlas-cfn-resources`,
+      bucketName: `mongodbatlas-cfn-resources-${getAccountNameById(this.account)}`,
       removalPolicy: RemovalPolicy.DESTROY
     });
     customServiceProviderBucket.addToResourcePolicy(new PolicyStatement({

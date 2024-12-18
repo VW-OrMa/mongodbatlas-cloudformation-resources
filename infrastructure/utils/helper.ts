@@ -1,6 +1,6 @@
 enum ACCOUNTS {
-  PRODUCTION = 'common', // common
-  DEVELOPMENT = 'dev', // dev
+  PRODUCTION = 'common',
+  DEVELOPMENT = 'dev',
 }
 
 export function getVwsServiceRoleArn(accountId: string): string {
