@@ -7,7 +7,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
-	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	cfTypes "github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"io"
 	"log"
@@ -27,6 +28,7 @@ var (
 
 type Service struct {
 	cfClient   *cloudformation.Client
+	ec2Client  *ec2.Client
 	roleArn    string
 	bucketName string
 }
@@ -39,9 +41,14 @@ func NewService(ctx context.Context, accountId string) *Service {
 
 	roleArn := strings.Replace(roleArnTemplate, "{ACCOUNT_ID}", accountId, 1)
 
-	// Build up new session to access the target account as the service role
+	// Get service role credentials to handle actions on other accounts
 	stsClient := sts.NewFromConfig(cfg)
 	credentials := stscreds.NewAssumeRoleProvider(stsClient, roleArn)
+
+	// To create the VPC endpoint in the target account (TODO)
+	ec2Client := ec2.NewFromConfig(cfg, func(options *ec2.Options) {
+		options.Credentials = credentials
+	})
 
 	cfClient := cloudformation.NewFromConfig(cfg, func(options *cloudformation.Options) {
 		options.Credentials = credentials
@@ -49,6 +56,7 @@ func NewService(ctx context.Context, accountId string) *Service {
 
 	return &Service{
 		cfClient:   cfClient,
+		ec2Client:  ec2Client,
 		roleArn:    roleArn,
 		bucketName: bucketName,
 	}
@@ -76,7 +84,7 @@ func (s *Service) OnCreated(ctx context.Context, props *ResourceProps) error {
 	}
 
 	input := &cloudformation.RegisterTypeInput{
-		Type:                 types.RegistryTypeResource,
+		Type:                 cfTypes.RegistryTypeResource,
 		TypeName:             aws.String(props.TypeName),
 		SchemaHandlerPackage: aws.String(fmt.Sprintf("s3://%s/%s.zip", s.bucketName, helper.ToKebabCase(props.TypeToActivate))),
 		ExecutionRoleArn:     aws.String(s.roleArn),
@@ -114,7 +122,7 @@ func (s *Service) OnRelease(ctx context.Context, props *ResourceProps, n Notific
 	}
 
 	input := &cloudformation.DeregisterTypeInput{
-		Type:     types.RegistryTypeResource,
+		Type:     cfTypes.RegistryTypeResource,
 		TypeName: aws.String(props.TypeName),
 	}
 	_, err = s.cfClient.DeregisterType(ctx, input)

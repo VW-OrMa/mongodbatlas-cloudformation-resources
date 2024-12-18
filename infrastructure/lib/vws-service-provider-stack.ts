@@ -4,10 +4,10 @@ import {Queue} from "aws-cdk-lib/aws-sqs";
 import {Vpc} from "aws-cdk-lib/aws-ec2";
 import {Architecture, Code, Function, Runtime} from "aws-cdk-lib/aws-lambda";
 import {AccountPrincipal, ManagedPolicy, PolicyStatement, Role, ServicePrincipal} from "aws-cdk-lib/aws-iam";
-import {createVpcName, getVwsServiceConsumerRole, getVwsServiceQueueArn} from "../utils/helper";
+import {createVpcName, getAccountNameById, getVwsServiceConsumerRole, getVwsServiceQueueArn} from "../utils/helper";
 import {Duration, SecretValue, Stack, StackProps} from "aws-cdk-lib";
 import {Secret} from "aws-cdk-lib/aws-secretsmanager";
-import {IBucket} from "aws-cdk-lib/aws-s3";
+import {Bucket} from "aws-cdk-lib/aws-s3";
 import {OutgoingProxy, OutgoingProxyCredentials} from "@vw-sre/vws-cdk";
 
 const AtlasBasicResources: string[] = [
@@ -17,13 +17,11 @@ const AtlasBasicResources: string[] = [
   "ProjectIpAccessList",
 ];
 
-interface VwsServiceProviderStackProps extends StackProps {
-  resourceBucket: IBucket
-}
-
 export class VwsServiceProviderStack extends Stack {
-  constructor(scope: Construct, id: string, props: VwsServiceProviderStackProps) {
+  constructor(scope: Construct, id: string, props: StackProps) {
     super(scope, id, props);
+
+    const resourceBucket = Bucket.fromBucketName(this, 'ResourceBucket', `mongodbatlas-cfn-resources-${getAccountNameById(this.account)}`);
 
     const vpc = Vpc.fromLookup(this, 'Vpc', {
       vpcName: createVpcName(this.account),
@@ -58,11 +56,12 @@ export class VwsServiceProviderStack extends Stack {
       managedPolicies: [
         ManagedPolicy.fromAwsManagedPolicyName('AWSCloudFormationFullAccess'),
         ManagedPolicy.fromAwsManagedPolicyName('CloudWatchLogsFullAccess'),
+        ManagedPolicy.fromAwsManagedPolicyName('AWSLambdaVPCAccessExecutionRole'),
       ],
     });
     lambdaExecutionRole.addToPolicy(new PolicyStatement({
       actions: ['s3:*'],
-      resources: [props.resourceBucket.arnForObjects('*')],
+      resources: [resourceBucket.arnForObjects('*')],
     }));
     lambdaExecutionRole.addToPolicy(new PolicyStatement({
       actions: ['kms:*'],
@@ -88,7 +87,7 @@ export class VwsServiceProviderStack extends Stack {
         TYPES_TO_ACTIVATE: AtlasBasicResources.join(','),
         EXECUTION_ROLE_ARN_TEMPLATE: `arn:aws:iam::{ACCOUNT_ID}:role/vws/initializer/${serviceConsumerRole}`,
         SERVICES_PROXY: serviceProxyUrl,
-        BUCKET_NAME: props.resourceBucket.bucketName,
+        BUCKET_NAME: resourceBucket.bucketName,
       },
       timeout: Duration.seconds(90),
     });

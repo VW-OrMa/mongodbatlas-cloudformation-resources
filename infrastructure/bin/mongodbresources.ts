@@ -16,7 +16,6 @@ const mongoDbAtlasResourcesStack = new MongoDbAtlasResourcesStack(app, 'MongoDbA
 
 const vwsServiceProviderStack = new VwsServiceProviderStack(app, 'MongoDBAtlasResourcesProviderStack', {
   stackName: 'MongoDBAtlasResourcesProvider',
-  resourceBucket: mongoDbAtlasResourcesStack.customServiceProviderBucket,
   env
 });
 // Resources have to be available before the service provider can be created
