@@ -7,10 +7,10 @@ export function getVwsServiceQueueArn(accountId: string): string {
   let queueId;
   switch (getAccountNameById(accountId)) {
     case ACCOUNTS.PRODUCTION:
-      queueId = '4b5e16d0-9b2a-47eb-a050-a92786cc4f8a';
+      queueId = '3c678860-f9b2-4872-9be4-8ef45275635f';
       break;
     case ACCOUNTS.DEVELOPMENT:
-      queueId = 'd7969cfe-9bc3-45c9-9820-454daef4f43b';
+      queueId = '872ebdaa-5b77-4f13-9e29-af25c9db4123';
       break;
     default:
       throw new Error('VWS service queue arn could not be mapped');
